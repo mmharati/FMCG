@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract Logestic is Ownable {
+    constructor() Ownable(msg.sender) { }
+    struct Driver {
+        string name;
+        string idCar;
+    }
+
+    struct Customer {
+        string name;
+        string customerAddress;  // Renamed `address` to `customerAddress` to avoid confusion with the address type
+        string phoneNumber;
+    }
+
+    struct Order {
+        uint256 orderNumber;
+        uint256 orderDate;  // Unix timestamp
+        string orderPriority;
+        string customerName;
+        string customerAddress;
+    }
+
+    struct Shipment {
+        uint256 shipmentID;
+        string driverName;
+        string[] receivers;  // List of customer names
+        string origins;
+        string destinations;
+        ShipmentStatus status;
+        string trackingNumber;
+        uint256 weight;
+        uint256 createdAt;
+        uint256 updatedAt;
+    }
+
+    enum ShipmentStatus { Pending, InTransit, Delivered, Returned }
+
+    // Dynamic arrays to store drivers, customers, orders, and shipments
+    Driver[] public drivers;
+    Customer[] public customers;
+    Order[] public orders;
+    Shipment[] public shipments;
+
+    // Mappings to track existing names for duplicate checks
+    mapping(string => bool) private driverExists;
+    mapping(string => bool) private customerExists;
+
+    event DriverCreated(string name, string idCar);
+    event CustomerCreated(string name, string customerAddress, string phoneNumber);
+    event OrderCreated(uint256 orderNumber, uint256 orderDate, string orderPriority, string customerName);
+    event ShipmentCreated(uint256 shipmentID, string driverName, string[] receivers);
+
+    /**
+     * @dev Create a new driver if they do not already exist.
+     * @param name The name of the driver to be added.
+     * @param idCar The ID of the driver's car.
+     */
+    function createDriver(string memory name, string memory idCar) external onlyOwner {
+        require(bytes(name).length > 0, "Driver name cannot be empty");
+        require(!driverExists[name], "Driver already exists");
+
+        // Add the new driver to the drivers list
+        drivers.push(Driver(name, idCar));
+
+        // Mark the driver name as existing
+        driverExists[name] = true;
+
+        emit DriverCreated(name, idCar);
+    }
+
+    /**
+     * @dev Create a new customer if they do not already exist.
+     * @param name The name of the customer to be added.
+     * @param customerAddress The address of the customer.
+     * @param phoneNumber The phone number of the customer.
+     */
+    function createCustomer(string memory name, string memory customerAddress, string memory phoneNumber) external onlyOwner {
+        require(bytes(name).length > 0, "Customer name cannot be empty");
+        require(bytes(customerAddress).length > 0, "Customer address cannot be empty");
+        require(bytes(phoneNumber).length > 0, "Customer phone number cannot be empty");
+        require(!customerExists[name], "Customer already exists");
+
+        // Add the new customer to the customers list
+        customers.push(Customer(name, customerAddress, phoneNumber));
+
+        // Mark the customer name as existing
+        customerExists[name] = true;
+
+        emit CustomerCreated(name, customerAddress, phoneNumber);
+    }
+
+    /**
+     * @dev Create a new order if the customer exists.
+     * @param orderNumber The order number to be assigned.
+     * @param orderDate The order date (Unix timestamp).
+     * @param orderPriority The priority of the order.
+     * @param customerName The name of the customer for this order.
+     * @param customerAddress The address of the customer for this order.
+     */
+    function createOrder(uint256 orderNumber, uint256 orderDate, string memory orderPriority, string memory customerName, string memory customerAddress) external onlyOwner {
+        require(customerExists[customerName], "Customer does not exist");
+
+        // Add the new order to the orders list
+        orders.push(Order(orderNumber, orderDate, orderPriority, customerName, customerAddress));
+
+        emit OrderCreated(orderNumber, orderDate, orderPriority, customerName);
+    }
+
+    /**
+     * @dev Create a new shipment if the driver exists and receivers are valid customers.
+     * @param shipmentID The unique identifier for the shipment.
+     * @param driverName The name of the driver.
+     * @param receivers The addresses of the receivers.
+     * @param origins The origin of the shipment.
+     * @param destinations The destination of the shipment.
+     * @param trackingNumber The tracking number of the shipment.
+     * @param weight The weight of the shipment.
+     */
+    function createShipment(
+        uint256 shipmentID,
+        string memory driverName,
+        string[] memory receivers,
+        string memory origins,
+        string memory destinations,
+        string memory trackingNumber,
+        uint256 weight
+    ) external onlyOwner {
+        require(driverExists[driverName], "Driver does not exist");
+        
+        // Validate receivers
+        for (uint256 i = 0; i < receivers.length; i++) {
+            require(customerExists[receivers[i]], "Receiver does not exist");
+        }
+
+        // Create the new shipment
+        shipments.push(Shipment({
+            shipmentID: shipmentID,
+            driverName: driverName,
+            receivers: receivers,
+            origins: origins,
+            destinations: destinations,
+            status: ShipmentStatus.Pending,
+            trackingNumber: trackingNumber,
+            weight: weight,
+            createdAt: block.timestamp,
+            updatedAt: block.timestamp
+        }));
+
+        emit ShipmentCreated(shipmentID, driverName, receivers);
+    }
+}
